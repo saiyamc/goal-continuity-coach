@@ -1,0 +1,7 @@
+Visual verification completed 2026-09-09.
+
+Desktop 1280x720: three-column workspace rendered correctly with editorial typography, readable chat panel, stage navigation, blueprint sidebar, and no visible overflow or contrast issues.
+
+Mobile 390x844: header, stage pills, chat card, composer, and typography reflow correctly; stage navigation becomes horizontally scrollable as intended. No visible clipping in the top viewport.
+
+Build verification: pnpm check, pnpm test, and pnpm build completed with exit code 0. Build emitted only the existing large-chunk warning from the markdown/diagram rendering bundle.
