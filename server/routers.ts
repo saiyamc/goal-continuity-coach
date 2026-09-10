@@ -10,7 +10,7 @@ import { createGoal, getGoalForUser, getDb, listGoals, updateGoal } from "./db";
 import { goals } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
-const coachMessage = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(12000) });
+const coachMessage = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(30000) });
 const stageInstructions: Record<string, string> = {
   wedge: "Help the team choose one narrow user segment, one concrete goal, and one recurring derailment. Challenge generic productivity framing.",
   evidence: "Help the team turn interview notes into a single non-obvious customer insight. Separate evidence, interpretation, confidence, and design consequence. Never invent a quote or conversation.",
@@ -18,7 +18,13 @@ const stageInstructions: Record<string, string> = {
   rails: "Pressure-test the proposal against voice, payments, and logistics. Make each rail earn its place; it is valid to say a rail is not needed.",
   submit: "Help draft and critique The Ken's ten Solution Assembly answers. Respect the stated word limits and mark any missing evidence as a placeholder.",
 };
-const coachSystemPrompt = `You are Goal Continuity Coach, a sharp but humane case partner for The Ken Case Competition 2026 opening "Sticking to the goal." The team's merged product concept is a goal-continuity agent: it learns predictable derailers and adapts a user's goal between full, short, and emergency versions before an ordinary disruption turns into abandonment. Never invent interviews, quotes, survey results, user behaviour, partner capabilities, or evidence. Label Evidence, Hypothesis, Design choice, or Open question when useful. Push toward one user segment, one goal, and one repeated derailment. Preserve dignity and autonomy: no shame, surveillance, manipulative nudges, or action without consent. A smaller action preserves continuity but is not equivalent to the full goal. If the team has no research, give prompts and hypotheses, not a made-up insight. The team must provide a 60-word insight, six agent steps with 15 words maximum each, three rail sentences, and ten answers.`;
+const coachSystemPrompt = `You are Goal Continuity Coach, a sharp but humane case partner for The Ken Case Competition 2026 opening "Sticking to the goal." The team's merged product concept is a goal-continuity agent: it learns predictable derailers and adapts a user's goal between full, short, and emergency versions before an ordinary disruption turns into abandonment.
+
+You are designed for extremely long, dense, multi-person inputs. Read the entire input before answering. Extract every person, goal, constraint, time pattern, emotional signal, contradiction, and proposed workaround. Do not collapse multiple people into one generic user. If the team lists several members or users, create a compact comparison before synthesising.
+
+Never invent interviews, quotes, survey results, user behaviour, partner capabilities, or evidence. Label Evidence, Hypothesis, Design choice, or Open question when useful. Push toward one user segment, one goal, and one repeated derailment, but preserve meaningful differences between people. Preserve dignity and autonomy: no shame, surveillance, manipulative nudges, or action without consent. A smaller action preserves continuity but is not equivalent to the full goal. If the team has no research, give prompts and hypotheses, not a made-up insight. The team must provide a 60-word insight, six agent steps with 15 words maximum each, three rail sentences, and ten answers.
+
+For dense inputs, use this response structure when appropriate: 1) What I heard, 2) Common pattern, 3) Important differences, 4) Evidence versus hypothesis, 5) Best wedge, 6) What to ask next, 7) Product implication.`;
 
 export const SIX_HOUR_CRON = "0 0 */6 * * *";
 
@@ -44,12 +50,26 @@ export const appRouter = router({
     }),
   }),
   coach: router({
-    chat: publicProcedure.input(z.object({ messages: z.array(coachMessage).min(1).max(24), stage: z.string().max(40).default("wedge"), notes: z.string().max(16000).optional().default("") })).mutation(async ({ input }) => {
+    chat: publicProcedure.input(z.object({ messages: z.array(coachMessage).min(1).max(48), stage: z.string().max(40).default("wedge"), notes: z.string().max(40000).optional().default("") })).mutation(async ({ input }) => {
       const stage = stageInstructions[input.stage] ?? stageInstructions.wedge;
       const notesBlock = input.notes.trim() ? `\n\nTEAM WORKING NOTES (unverified until confirmed):\n${input.notes.trim().slice(0, 12000)}` : "";
-      const response = await invokeLLM({ model: "gpt-5-mini", messages: [{ role: "system", content: `${coachSystemPrompt}\n\nCURRENT STAGE:\n${stage}${notesBlock}` }, ...input.messages.slice(-16)], reasoning: { effort: "low" }, maxTokens: 1200 });
-      const rawContent = response.choices?.[0]?.message?.content;
-      const content = typeof rawContent === "string" && rawContent.trim() ? rawContent.trim() : "I didn’t get a usable coaching response. Try that once more.";
+      const promptMessages = [{ role: "system" as const, content: `${coachSystemPrompt}\n\nCURRENT STAGE:\n${stage}${notesBlock}` }, ...input.messages.slice(-28)];
+      let rawContent: unknown = "";
+      try {
+        const response = await invokeLLM({ model: "gpt-5-mini", messages: promptMessages, reasoning: { effort: "low" }, maxTokens: 2200 });
+        rawContent = response.choices?.[0]?.message?.content;
+      } catch (primaryError) {
+        console.warn("[Coach] Primary long-context model failed; using fallback", String(primaryError));
+      }
+      if (typeof rawContent !== "string" || !rawContent.trim()) {
+        try {
+          const fallback = await invokeLLM({ model: "gpt-5", messages: promptMessages, reasoning: { effort: "low" } });
+          rawContent = fallback.choices?.[0]?.message?.content;
+        } catch (fallbackError) {
+          console.warn("[Coach] Fallback long-context model failed", String(fallbackError));
+        }
+      }
+      const content = typeof rawContent === "string" && rawContent.trim() ? rawContent.trim() : "I couldn’t produce a complete analysis from that input. Please keep the same detail and send it again; the coach supports long multi-person case notes.";
       return { content, nextStage: input.stage };
     }),
   }),

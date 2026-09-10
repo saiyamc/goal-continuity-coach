@@ -95,7 +95,7 @@ export default function Home() {
         ...current,
         {
           role: "assistant",
-          content: "I couldn’t reach the coaching model just now. Your notes are still safe in this browser—please try sending that again.",
+          content: "I couldn’t complete that deep analysis just now. Your notes are still safe in this browser—please send it again; long, dense case inputs are supported.",
         },
       ]);
     }
@@ -212,7 +212,7 @@ export default function Home() {
               </div>
               <form onSubmit={submit} className="border-t border-[#e4e8e2] bg-[#fbfcfa] p-4 sm:p-5">
                 <div className="relative rounded-2xl border border-[#d9e2d8] bg-white p-2 shadow-[0_4px_16px_rgba(24,51,40,0.04)] focus-within:border-[#8da66b] focus-within:ring-4 focus-within:ring-[#e9f1d8]">
-                  <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="Tell me about the person, the goal, or the day it broke..." rows={2} className="w-full resize-none border-0 bg-transparent px-3 py-2 text-sm leading-6 outline-none placeholder:text-[#a2aca5]" />
+                  <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="Paste a long case, multiple people, or the day the goal broke..." rows={2} className="w-full resize-none border-0 bg-transparent px-3 py-2 text-sm leading-6 outline-none placeholder:text-[#a2aca5]" />
                   <div className="flex items-center justify-between px-1 pb-1"><div className="flex items-center gap-1"><button type="button" onClick={() => setShowNotes((value) => !value)} className="small-action"><FileText className="h-3.5 w-3.5" /> {showNotes ? "Hide notes" : "Add notes"}</button><button type="button" onClick={toggleVoice} className={`small-action ${isListening ? "text-[#a9503a]" : ""}`}><Mic2 className="h-3.5 w-3.5" /> {isListening ? "Listening" : "Speak"}</button></div><button type="submit" disabled={!draft.trim() || chatMutation.isPending} className="send-button"><ArrowUpRight className="h-4 w-4" /></button></div>
                 </div>
                 {showNotes && <div className="mt-3 rounded-xl border border-[#e0e8d9] bg-[#f5f9ee] p-3"><label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-[#61715d]">Working notes · stored only in this browser</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Paste interview notes, rough observations, or quotes here..." className="w-full resize-none rounded-lg border border-[#dce6d3] bg-white p-2.5 text-xs leading-5 outline-none focus:border-[#8da66b]" /></div>}
