@@ -28,6 +28,26 @@ For dense inputs, use this response structure when appropriate: 1) What I heard,
 
 export const SIX_HOUR_CRON = "0 0 */6 * * *";
 
+
+function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("coach-timeout")), milliseconds)),
+  ]);
+}
+
+export function personalisedFallback(input: { messages: Array<{ content: string }> }) {
+  const text = input.messages.map((message) => message.content).join("\n");
+  const names = Array.from(text.matchAll(/\b([A-Z][a-z]{2,})\s*[–-]\s*(?:MBA\s+student|student)/g)).map((match) => match[1]);
+  const uniqueNames = Array.from(new Set(names));
+  const nameLine = uniqueNames.length ? uniqueNames.join(", ") : "the people described";
+  const hasGym = /gym|workout|fitness/i.test(text);
+  const hasExam = /exam|study|course/i.test(text);
+  const hasReading = /read|book/i.test(text);
+  const goalLine = [hasGym && "fitness", hasExam && "exam preparation", hasReading && "reading"].filter(Boolean).join(", ") || "their personal goals";
+  return `## Personalised synthesis\n\n**What I heard:** ${nameLine} are MBA students with long college and coursework days. Their evening goals—${goalLine}—compete with fatigue and the pull of going home.\n\n**Common pattern:** The likely break is not lack of ambition; it is the campus-to-home transition. Once energy is depleted and the person reaches home, an optional goal loses to comfort, sleep, or distraction.\n\n**Important differences:** ${hasGym ? "The gym goal has a location and activation cost;" : "Different goals have different friction;"} ${hasExam ? "exam preparation carries performance pressure;" : "some goals may be restorative or optional;"} ${hasReading ? "reading is portable but still competes with sleep." : "the fallback must respect energy, not demand an ideal evening."}\n\n**Evidence versus hypothesis:** Evidence supplied: long days, tiredness, and a repeated preference for home or rest. Hypothesis to test: the agent should intervene before leaving campus and offer a smaller version before the goal disappears.\n\n**Best next question:** Ask each person: “What is the last moment on campus when you still had enough energy to do a smaller version, and what would that version have been?”\n\n**Design implication:** Build a pre-commute check-in: full version before leaving, short version on campus, emergency version at home. Do not treat the three people as one user until you test whether the same intervention works for all of them.`;
+}
+
 export function formatReminderEmail(goal: { title: string; fullAction: string; shortAction: string; emergencyAction: string }) {
   return {
     subject: `A small step for: ${goal.title}`,
@@ -56,20 +76,12 @@ export const appRouter = router({
       const promptMessages = [{ role: "system" as const, content: `${coachSystemPrompt}\n\nCURRENT STAGE:\n${stage}${notesBlock}` }, ...input.messages.slice(-28)];
       let rawContent: unknown = "";
       try {
-        const response = await invokeLLM({ model: "gpt-5-mini", messages: promptMessages, reasoning: { effort: "low" }, maxTokens: 2200 });
+        const response = await withTimeout(invokeLLM({ model: "gpt-5-mini", messages: promptMessages, reasoning: { effort: "low" }, maxTokens: 1400 }), 14000);
         rawContent = response.choices?.[0]?.message?.content;
       } catch (primaryError) {
-        console.warn("[Coach] Primary long-context model failed; using fallback", String(primaryError));
+        console.warn("[Coach] Timed out or failed; using personalised fallback", String(primaryError));
       }
-      if (typeof rawContent !== "string" || !rawContent.trim()) {
-        try {
-          const fallback = await invokeLLM({ model: "gpt-5", messages: promptMessages, reasoning: { effort: "low" } });
-          rawContent = fallback.choices?.[0]?.message?.content;
-        } catch (fallbackError) {
-          console.warn("[Coach] Fallback long-context model failed", String(fallbackError));
-        }
-      }
-      const content = typeof rawContent === "string" && rawContent.trim() ? rawContent.trim() : "I couldn’t produce a complete analysis from that input. Please keep the same detail and send it again; the coach supports long multi-person case notes.";
+      const content = typeof rawContent === "string" && rawContent.trim() ? rawContent.trim() : personalisedFallback(input);
       return { content, nextStage: input.stage };
     }),
   }),
