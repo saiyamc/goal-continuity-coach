@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cronForTime, formatReminderEmail } from "./routers";
+import { SIX_HOUR_CRON, formatReminderEmail } from "./routers";
 
 describe("goal reminders", () => {
   it("creates a UTC heartbeat expression from the configured time", () => {
-    expect(cronForTime("20:05")).toBe("0 5 20 * * *");
-    expect(cronForTime("08:00")).toBe("0 0 8 * * *");
+    expect(SIX_HOUR_CRON).toBe("0 0 */6 * * *");
   });
 
   it("keeps the full, busy-day, and emergency actions in the reminder", () => {

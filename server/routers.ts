@@ -20,10 +20,7 @@ const stageInstructions: Record<string, string> = {
 };
 const coachSystemPrompt = `You are Goal Continuity Coach, a sharp but humane case partner for The Ken Case Competition 2026 opening "Sticking to the goal." The team's merged product concept is a goal-continuity agent: it learns predictable derailers and adapts a user's goal between full, short, and emergency versions before an ordinary disruption turns into abandonment. Never invent interviews, quotes, survey results, user behaviour, partner capabilities, or evidence. Label Evidence, Hypothesis, Design choice, or Open question when useful. Push toward one user segment, one goal, and one repeated derailment. Preserve dignity and autonomy: no shame, surveillance, manipulative nudges, or action without consent. A smaller action preserves continuity but is not equivalent to the full goal. If the team has no research, give prompts and hypotheses, not a made-up insight. The team must provide a 60-word insight, six agent steps with 15 words maximum each, three rail sentences, and ten answers.`;
 
-export function cronForTime(time: string) {
-  const [hour, minute] = time.split(":").map(Number);
-  return `0 ${minute} ${hour} * * *`;
-}
+export const SIX_HOUR_CRON = "0 0 */6 * * *";
 
 export function formatReminderEmail(goal: { title: string; fullAction: string; shortAction: string; emergencyAction: string }) {
   return {
@@ -76,7 +73,7 @@ export const appRouter = router({
         return { enabled: false };
       }
       if (!goal.reminderEmail) throw new Error("Add a reminder email before enabling delivery");
-      const job = await createHeartbeatJob({ name: `goal-reminder-${goal.id}`, cron: cronForTime(goal.reminderTime), path: "/api/scheduled/goalReminder", payload: {}, description: `Goal Continuity reminder for ${goal.title}` }, token);
+      const job = await createHeartbeatJob({ name: `goal-reminder-${goal.id}`, cron: SIX_HOUR_CRON, path: "/api/scheduled/goalReminder", payload: {}, description: `Goal Continuity reminder for ${goal.title}` }, token);
       await updateGoal(goal.id, ctx.user.id, { reminderEnabled: 1, scheduleCronTaskUid: job.taskUid });
       return { enabled: true, nextExecutionAt: job.nextExecutionAt ?? null };
     }),
@@ -89,6 +86,13 @@ export async function handleGoalReminder(taskUid: string) {
   const rows = await db.select().from(goals).where(eq(goals.scheduleCronTaskUid, taskUid)).limit(1);
   const goal = rows[0];
   if (!goal || !goal.reminderEnabled) return { ok: true, skipped: "orphan-or-disabled" };
+  const now = Date.now();
+  const lastCompleted = goal.lastCompletedAt?.getTime() ?? 0;
+  const lastReminder = goal.lastReminderAt?.getTime() ?? 0;
+  if (lastCompleted > lastReminder && now - lastCompleted < 6 * 60 * 60 * 1000) {
+    await db.update(goals).set({ lastReminderAt: new Date(now) }).where(eq(goals.id, goal.id));
+    return { ok: true, skipped: "completed-this-window", goalId: goal.id };
+  }
   const webhook = process.env.REMINDER_EMAIL_WEBHOOK_URL;
   if (!webhook) return { ok: true, skipped: "email-provider-not-configured", goalId: goal.id };
   const response = await fetch(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: goal.reminderEmail, ...formatReminderEmail(goal) }) });
