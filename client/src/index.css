@@ -45,3 +45,12 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .delay-2 { animation-delay: 240ms; }
 @keyframes pulse { 0%, 100% { transform: translateY(0); opacity: .45; } 50% { transform: translateY(-3px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+.goal-panel { border: 1px solid #d4e0c4; border-radius: 20px; background: #f0f6e5; padding: 18px; }
+.goal-panel-icon { display: grid; flex: 0 0 auto; place-items: center; height: 30px; width: 30px; border-radius: 10px; background: #dcebc0; color: #58743b; }
+.add-goal-button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; border-radius: 10px; background: #163c30; padding: 8px 11px; color: #e8f6c6; font-size: 11px; font-weight: 700; transition: transform 160ms var(--ease-out), background 160ms var(--ease-out); }
+.add-goal-button:hover { background: #295b47; transform: translateY(-1px); }
+.goal-card { border: 1px solid #d9e5ce; border-radius: 14px; background: rgba(255,255,255,.72); padding: 13px; }
+.field-label { display: block; color: #5d6d62; font-size: 11px; font-weight: 700; }
+.field-input { display: block; width: 100%; margin-top: 5px; border: 1px solid #d9e2d8; border-radius: 9px; background: white; padding: 9px 10px; color: #27382e; font-size: 12px; font-weight: 400; outline: none; }
+.field-input:focus { border-color: #8da66b; box-shadow: 0 0 0 3px #e7f0d8; }

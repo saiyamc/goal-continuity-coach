@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import GoalPanel from "@/components/GoalPanel";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -217,6 +218,8 @@ export default function Home() {
                 {showNotes && <div className="mt-3 rounded-xl border border-[#e0e8d9] bg-[#f5f9ee] p-3"><label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-[#61715d]">Working notes · stored only in this browser</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Paste interview notes, rough observations, or quotes here..." className="w-full resize-none rounded-lg border border-[#dce6d3] bg-white p-2.5 text-xs leading-5 outline-none focus:border-[#8da66b]" /></div>}
               </form>
             </div>
+
+            <GoalPanel />
 
             <div className="mt-5 grid gap-2 sm:grid-cols-3">
               {openingPrompts.map((prompt) => <button key={prompt} onClick={() => void sendMessage(prompt)} className="prompt-card"><span>{prompt}</span><ChevronRight className="h-4 w-4 shrink-0 text-[#a1aea4]" /></button>)}
