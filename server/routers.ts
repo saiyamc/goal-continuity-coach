@@ -9,6 +9,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { createGoal, getGoalForUser, getDb, listGoals, updateGoal } from "./db";
 import { goals } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { ENV } from "./_core/env";
 
 const coachMessage = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(30000) });
 const stageInstructions: Record<string, string> = {
@@ -67,6 +68,35 @@ export const appRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
+    }),
+  }),
+
+  voice: router({
+    speak: publicProcedure.input(z.object({
+      text: z.string().min(1).max(8000),
+      voice: z.enum(["Kaveri", "Poorvi", "Nalini", "Deepak"]).default("Kaveri"),
+      language: z.enum(["en-IN", "hi-IN", "hi-en", "ta-IN", "te-IN", "kn-IN", "mr-IN", "bn-IN", "ml-IN", "pa-IN", "gu-IN"]).default("en-IN"),
+    })).mutation(async ({ input }) => {
+      if (!ENV.gnaniApiKey) throw new Error("Gnani voice is not configured");
+      const response = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
+        method: "POST",
+        headers: { "content-type": "application/json", "X-API-Key-ID": ENV.gnaniApiKey },
+        body: JSON.stringify({
+          text: input.text,
+          voice: input.voice,
+          model: "timbre-v2.5",
+          language: input.language,
+          speed: 1.0,
+          audio_config: { sample_rate: 24000, num_channels: 1, sample_width: 2, encoding: "linear_pcm", container: "wav" },
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Gnani TTS failed (${response.status}): ${detail.slice(0, 240)}`);
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      return { audioBase64: bytes.toString("base64"), mimeType: response.headers.get("content-type")?.split(";")[0] || "audio/wav", model: "timbre-v2.5" };
     }),
   }),
   coach: router({

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import {
   ArrowUpRight,
@@ -10,6 +10,8 @@ import {
   FileText,
   Flag,
   Mic2,
+  Volume2,
+  Square,
   RotateCcw,
   ShieldCheck,
   Sparkles,
@@ -61,6 +63,9 @@ export default function Home() {
   const [isListening, setIsListening] = useState(false);
 
   const chatMutation = trpc.coach.chat.useMutation();
+  const voiceMutation = trpc.voice.speak.useMutation();
+  const [playingMessage, setPlayingMessage] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeStageData = useMemo(() => stages.find((stage) => stage.id === activeStage) ?? stages[0], [activeStage]);
 
   useEffect(() => {
@@ -104,6 +109,27 @@ export default function Home() {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void sendMessage();
+  };
+
+  const speakMessage = async (content: string, index: number) => {
+    if (playingMessage === index && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+      setPlayingMessage(null);
+      return;
+    }
+    audioRef.current?.pause();
+    setPlayingMessage(index);
+    try {
+      const result = await voiceMutation.mutateAsync({ text: content.replace(/[*_#`]/g, ""), voice: "Kaveri", language: "en-IN" });
+      const audio = new Audio(`data:${result.mimeType};base64,${result.audioBase64}`);
+      audio.onended = () => { setPlayingMessage(null); audioRef.current = null; };
+      audioRef.current = audio;
+      await audio.play();
+    } catch {
+      setPlayingMessage(null);
+    }
   };
 
   const resetChat = () => {
@@ -204,7 +230,7 @@ export default function Home() {
                   <div key={`${message.role}-${index}`} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                     {message.role === "assistant" && <div className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#163c30] text-[#e8f6c6]"><Sparkles className="h-3.5 w-3.5" /></div>}
                     <div className={message.role === "user" ? "message-user" : "message-assistant"}>
-                      {message.role === "assistant" ? <Streamdown>{message.content}</Streamdown> : <p className="whitespace-pre-wrap">{message.content}</p>}
+                      {message.role === "assistant" ? <><Streamdown>{message.content}</Streamdown><button type="button" onClick={() => void speakMessage(message.content, index)} className="small-action mt-3" disabled={voiceMutation.isPending && playingMessage !== index} aria-label={playingMessage === index ? "Stop voice playback" : "Play response aloud"}>{playingMessage === index ? <Square className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}{voiceMutation.isPending && playingMessage === index ? "Preparing voice" : playingMessage === index ? "Stop" : "Listen"}</button></> : <p className="whitespace-pre-wrap">{message.content}</p>}
                     </div>
                   </div>
                 ))}
